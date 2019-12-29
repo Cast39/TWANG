@@ -1,4 +1,5 @@
 // Required libs
+//#define FASTLED_ESP8266_RAW_PIN_ORDER
 #include "FastLED.h"
 #include "I2Cdev.h"
 #include "MPU6050.h"
@@ -21,9 +22,9 @@ int16_t ax, ay, az;
 int16_t gx, gy, gz;
 
 // LED setup
-#define NUM_LEDS             475
-#define DATA_PIN             3
-#define CLOCK_PIN            4
+#define NUM_LEDS             300
+#define DATA_PIN             51
+#define CLOCK_PIN            52
 #define LED_COLOR_ORDER      BGR//GBR
 #define BRIGHTNESS           150
 #define DIRECTION            1     // 0 = right to left, 1 = left to right
@@ -36,7 +37,7 @@ long previousMillis = 0;           // Time of the last redraw
 int levelNumber = 0;
 long lastInputTime = 0;
 #define TIMEOUT              30000
-#define LEVEL_COUNT          9
+#define LEVEL_COUNT          12
 #define MAX_VOLUME           10
 iSin isin = iSin();
 
@@ -66,7 +67,7 @@ long killTime;
 int lives = 3;
 
 // POOLS
-int lifeLEDs[3] = {52, 50, 40};
+int lifeLEDs[3] = {22, 26, 24};
 Enemy enemyPool[10] = {
     Enemy(), Enemy(), Enemy(), Enemy(), Enemy(), Enemy(), Enemy(), Enemy(), Enemy(), Enemy()
 };
@@ -92,6 +93,16 @@ Boss boss = Boss();
 CRGB leds[NUM_LEDS];
 RunningMedian MPUAngleSamples = RunningMedian(5);
 RunningMedian MPUWobbleSamples = RunningMedian(5);
+
+#if 0
+int max(long int a, int b){
+  if(a > b){
+    return a;
+  }else {
+    return b;
+  }
+}
+#endif
 
 void setup() {
     Serial.begin(9600);
@@ -264,11 +275,11 @@ void loadLevel(){
         case 0:
             // Left or right?
             playerPosition = 200;
-            spawnEnemy(1, 0, 0, 0);
+            spawnEnemy(1, 0, 0, 0, 0);
             break;
         case 1:
             // Slow moving enemy
-            spawnEnemy(900, 0, 1, 0);
+            spawnEnemy(900, 0, 1, 0, 1500);
             break;
         case 2:
             // Spawning enemies at exit every 2 seconds
@@ -281,26 +292,32 @@ void loadLevel(){
             break;
         case 4:
             // Sin enemy
-            spawnEnemy(700, 1, 7, 275);
-            spawnEnemy(500, 1, 5, 250);
+            spawnEnemy(700, 1, 7, 275, 0);
+            spawnEnemy(500, 1, 5, 250, 0);
             break;
         case 5:
             // Conveyor
             spawnConveyor(100, 600, -1);
-            spawnEnemy(800, 0, 0, 0);
+            spawnEnemy(800, 0, 0, 0, 0);
             break;
         case 6:
             // Conveyor of enemies
             spawnConveyor(50, 1000, 1);
-            spawnEnemy(300, 0, 0, 0);
-            spawnEnemy(400, 0, 0, 0);
-            spawnEnemy(500, 0, 0, 0);
-            spawnEnemy(600, 0, 0, 0);
-            spawnEnemy(700, 0, 0, 0);
-            spawnEnemy(800, 0, 0, 0);
-            spawnEnemy(900, 0, 0, 0);
+            spawnEnemy(300, 0, 0, 0, 0);
+            spawnEnemy(400, 0, 0, 0, 0);
+            spawnEnemy(500, 0, 0, 0, 0);
+            spawnEnemy(600, 0, 0, 0, 0);
+            spawnEnemy(700, 0, 0, 0, 0);
+            spawnEnemy(800, 0, 0, 0, 0);
+            spawnEnemy(900, 0, 0, 0, 0);
             break;
         case 7:
+            // NEW
+            spawnLava(150, 300, 1000, 2000, 2000, "OFF");
+            spawnLava(300, 450, 1000, 2000, 1000, "OFF");
+            spawnLava(450, 600, 1000, 2000, 0, "OFF");
+            break;
+        case 8:
             // Lava run
             spawnLava(195, 300, 2000, 2000, 0, "OFF");
             spawnLava(350, 455, 2000, 2000, 0, "OFF");
@@ -308,15 +325,28 @@ void loadLevel(){
             spawnLava(660, 760, 2000, 2000, 0, "OFF");
             spawnPool[0].Spawn(1000, 3800, 4, 0, 0);
             break;
-        case 8:
+        case 9:
+            // NEW
+            spawnEnemy(505, -1, 3, 1, 0);
+            spawnLava(150, 475, 1750, 1750, 0, "OFF");
+            spawnLava(525, 850, 1750, 1750, 0, "OFF");
+            break;
+        case 10:
             // Sin enemy #2
-            spawnEnemy(700, 1, 7, 275);
-            spawnEnemy(500, 1, 5, 250);
+            spawnEnemy(700, 1, 7, 275, 0);
+            spawnEnemy(500, 1, 5, 250, 0);
             spawnPool[0].Spawn(1000, 5500, 4, 0, 3000);
             spawnPool[1].Spawn(0, 5500, 5, 1, 10000);
             spawnConveyor(100, 900, -1);
             break;
-        case 9:
+        case 11:
+            // NEW
+            spawnConveyor(150, 400, 1);
+            spawnLava(400, 600, 2500, 2500, 0, "OFF");
+            spawnConveyor(600, 850, -1);
+            spawnPool[0].Spawn(1000, 3000, 2, 0, 0);
+            break;
+        case 12:
             // Boss
             spawnBoss();
             break;
@@ -338,10 +368,10 @@ void moveBoss(){
     spawnPool[1].Spawn(boss._pos, spawnSpeed, 3, 1, 0);
 }
 
-void spawnEnemy(int pos, int dir, int sp, int wobble){
+void spawnEnemy(int pos, int dir, int sp, int wobble, int offset){
     for(int e = 0; e<enemyCount; e++){
         if(!enemyPool[e].Alive()){
-            enemyPool[e].Spawn(pos, dir, sp, wobble);
+            enemyPool[e].Spawn(pos, dir, sp, wobble, offset);
             enemyPool[e].playerSide = pos > playerPosition?1:-1;
             return;
         }
@@ -425,8 +455,8 @@ void die(){
 // ----------------------------------
 void tickEnemies(){
     for(int i = 0; i<enemyCount; i++){
-        if(enemyPool[i].Alive()){
-            enemyPool[i].Tick();
+      enemyPool[i].Tick();
+        if(enemyPool[i].Alive() == 1){
             // Hit attack?
             if(attacking){
                 if(enemyPool[i]._pos > playerPosition-(ATTACK_WIDTH/2) && enemyPool[i]._pos < playerPosition+(ATTACK_WIDTH/2)){
@@ -439,7 +469,7 @@ void tickEnemies(){
                 SFXkill();
             }
             // Draw (if still alive)
-            if(enemyPool[i].Alive()) {
+            if(enemyPool[i].Alive() == 1) {
                 leds[getLED(enemyPool[i]._pos)] = CRGB(255, 0, 0);
             }
             // Hit player?
@@ -500,7 +530,7 @@ void tickSpawners(){
     for(int s = 0; s<spawnCount; s++){
         if(spawnPool[s].Alive() && spawnPool[s]._activate < mm){
             if(spawnPool[s]._lastSpawned + spawnPool[s]._rate < mm || spawnPool[s]._lastSpawned == 0){
-                spawnEnemy(spawnPool[s]._pos, spawnPool[s]._dir, spawnPool[s]._sp, 0);
+                spawnEnemy(spawnPool[s]._pos, spawnPool[s]._dir, spawnPool[s]._sp, 0, 0);
                 spawnPool[s]._lastSpawned = mm;
             }
         }
@@ -720,12 +750,3 @@ void SFXwin(){
 void SFXcomplete(){
     noToneAC();
 }
-
-
-
-
-
-
-
-
-

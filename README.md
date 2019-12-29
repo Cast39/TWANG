@@ -1,4 +1,9 @@
-# TWANG
+# WIng (TWANG at "Wiesbadener CCC assembly")
+# Changes:
+Added level 7, 9 and 11
+Added offset to basic Enemys
+
+# TWANG (original README)
 A Arduino-based, 1D, LED loving, dungeon crawler. inspired by Line Wobbler by Robin B
 
 ## Video playlist
